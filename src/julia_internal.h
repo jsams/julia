@@ -254,12 +254,12 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, size_t alignme
     return v;
 }
 JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, size_t alignment, void *ty);
-// On GCC, only inline when sz and alignment is constant
+// On GCC, only inline when sz and align is constant
 #ifdef __GNUC__
-#  define jl_gc_alloc(ptls, sz, alignment, ty)                     \
-    (__builtin_constant_p(sz) && __builtin_constant_p(alignment) ? \
-      jl_gc_alloc_(ptls, sz, alignment, ty) :                      \
-      (jl_gc_alloc)(ptls, sz, alignment, ty))
+#  define jl_gc_alloc(ptls, sz, align, ty)                     \
+    (__builtin_constant_p(sz) && __builtin_constant_p(align) ? \
+      jl_gc_alloc_(ptls, sz, align, ty) :                      \
+      (jl_gc_alloc)(ptls, sz, align, ty))
 #else
 #  define jl_gc_alloc(ptls, sz, align, ty) jl_gc_alloc_(ptls, sz, align, ty)
 #endif
