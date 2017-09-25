@@ -196,13 +196,10 @@ STATIC_INLINE size_t JL_CONST_FUNC jl_gc_alignsz(size_t sz, size_t alignment)
 {
     // The pools are aligned with JL_HEAP_ALIGNMENT and no bigger alignment is possible.
     assert(alignment <= JL_HEAP_ALIGNMENT);
-    // Pools with the correct alignment will have an object size that
-    // is a multiple of the alignment. As an example an allocation with
-    // sz of 48 and an alignment of 32 will need to be in pool of size 64.
-    // An alignment of 0 or 1 means unaligned and we can use sz directly.
-    if (alignment != 0 && alignment != 1 && alignment != sz)
-        sz = ((sz / alignment) + 1) * alignment;
-    return sz;
+    // Alignment need to be powers of two
+    assert(alignment & (alignment - 1) == 0);
+    size_t alsz = LLT_ALIGN(sz, alignment);
+    return alignment ? alsz : sz;
 }
 
 // Use jl_gc_alignsz to obtain the right sz.
@@ -247,7 +244,7 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, size_t alignme
             osize = p->osize;
         }
         assert((size_t)osize >= alignment &&
-               (alignment == 0 || alignment == 1 || osize % alignment == 0));
+               (alignment == 0 || (osize & (alignment - 1)) == 0));
         v = jl_gc_pool_alloc(ptls, (char*)p - (char*)ptls, osize);
     }
     else {
