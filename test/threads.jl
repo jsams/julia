@@ -280,6 +280,10 @@ let atomic_types = [Int8, Int16, Int32, Int64, Int128,
         filter!(T -> sizeof(T)<=8, atomic_types)
     end
     for T in atomic_types
+	# Check that alignment is natural alignment
+	@test Base.datatype_alignment(T) == Base.sizeof(T)
+    end
+    for T in atomic_types
         var = Atomic{T}()
         var[] = 42
         @test var[] === T(42)
