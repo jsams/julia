@@ -235,7 +235,8 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, size_t alignme
     assert(alignsz >= allocsz);
     const int klass = jl_gc_szclass(alignsz, alignment);
     jl_value_t *v;
-    if (klass != -1 && alignsz <= GC_MAX_SZCLASS + sizeof(jl_taggedvalue_t)) {
+    if (klass != -1){
+	assert(alignsz <= GC_MAX_SZCLASS + sizeof(jl_taggedvalue_t));
         int pool_id = klass;
         jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
         int osize;
