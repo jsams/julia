@@ -122,7 +122,6 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
     a->flags.ndims = ndims;
     a->flags.ptrarray = !isunboxed;
     a->elsize = elsz;
-    a->elalign = elalign;
     a->flags.isshared = 0;
     a->flags.isaligned = 1;
     a->offset = 0;
@@ -197,7 +196,6 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     assert(isboxed == data->flags.ptrarray);
     if (!isboxed) {
         a->elsize = elsz;
-        a->elalign = align;
         jl_value_t *ownerty = jl_typeof(owner);
         size_t oldelsz = 0, oldalign = 0;
         if (ownerty == (jl_value_t*)jl_string_type) {
@@ -214,7 +212,6 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     }
     else {
         a->elsize = sizeof(void*);
-        a->elalign = sizeof(void*);
         a->flags.ptrarray = 1;
     }
 
@@ -268,7 +265,6 @@ JL_DLLEXPORT jl_array_t *jl_string_to_array(jl_value_t *str)
     a->data = jl_string_data(str);
     a->flags.isaligned = 0;
     a->elsize = 1;
-    a->elalign = 0;
     a->flags.ptrarray = 0;
     jl_array_data_owner(a) = str;
     a->flags.how = 3;
@@ -316,7 +312,6 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
     a->length = nel;
 #endif
     a->elsize = elsz;
-    a->elalign = align;
     a->flags.ptrarray = !isunboxed;
     a->flags.ndims = 1;
     a->flags.isshared = 1;
@@ -383,7 +378,6 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
     a->length = nel;
 #endif
     a->elsize = elsz;
-    a->elalign = align;
     a->flags.ptrarray = !isunboxed;
     a->flags.ndims = ndims;
     a->offset = 0;
@@ -1047,7 +1041,7 @@ JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz)
 JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary)
 {
     size_t elsz = ary->elsize;
-    size_t elalign = ary->elalign;
+    size_t elalign = ary->flags.ptrarray ? sizeof(void*) : jl_datatype_align(jl_tparam0(jl_typeof(ary)));
     size_t len = jl_array_len(ary);
     jl_array_t *new_ary = _new_array_(jl_typeof(ary), jl_array_ndims(ary),
                                       &ary->nrows, !ary->flags.ptrarray, elsz, elalign);
