@@ -197,7 +197,7 @@ STATIC_INLINE size_t JL_CONST_FUNC jl_gc_alignsz(size_t sz, size_t alignment)
     // The pools are aligned with JL_HEAP_ALIGNMENT and no bigger alignment is possible.
     assert(alignment <= JL_HEAP_ALIGNMENT);
     // Alignment need to be powers of two
-    assert(alignment & (alignment - 1) == 0);
+    assert((alignment & (alignment - 1)) == 0);
     size_t alsz = LLT_ALIGN(sz, alignment);
     return alignment ? alsz : sz;
 }
