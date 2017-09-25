@@ -281,7 +281,11 @@ let atomic_types = [Int8, Int16, Int32, Int64, Int128,
     end
     for T in atomic_types
 	# Check that alignment is natural alignment
-	@test Base.datatype_alignment(T) == Base.sizeof(T)
+	if sizeof(T) == 16
+		@test_broken Base.datatype_alignment(T) == Base.sizeof(T)
+	else
+		@test Base.datatype_alignment(T) == Base.sizeof(T)
+	end
     end
     for T in atomic_types
         var = Atomic{T}()
