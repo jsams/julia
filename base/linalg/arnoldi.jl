@@ -341,6 +341,71 @@ size(A::AtA_or_AAt) = ntuple(i -> min(size(A.A)...), Val(2))
 ishermitian(s::AtA_or_AAt) = true
 
 
+# if you want to center your SVD
+struct Centered_AtA_or_AAt{T, S} <: AbstractArray{T, 2}
+    A::S
+    centers::Array{T, 2}
+    buffer::Vector{T}
+end
+
+function Centered_AtA_or_AAt(A::AbstractMatrix{T}) where T
+    Tnew = typeof(zero(T)/sqrt(one(T)))
+    Anew = convert(AbstractMatrix{Tnew}, A)
+    centers = mean(Anew, 1)
+    Centered_AtA_or_AAt{Tnew,typeof(Anew)}(Anew, centers, Vector{Tnew}(max(size(A)...)))
+end
+
+function Centered_AtA_or_AAt(A::AbstractMatrix{T}, centers::StridedArray{T, 2}) where T
+    Tnew = typeof(zero(T)/sqrt(one(T)))
+    Anew = convert(AbstractMatrix{Tnew}, A)
+    Centered_AtA_or_AAt{Tnew,typeof(Anew)}(Anew, centers, Vector{Tnew}(max(size(A)...)))
+end
+
+size(A::Centered_AtA_or_AAt) = ntuple(i -> min(size(A.A)...), Val(2))
+ishermitian(s::Centered_AtA_or_AAt) = true
+
+function A_mul_B!(y::StridedVector{T}, A::Centered_AtA_or_AAt{T}, x::StridedVector{T}) where T
+    if size(A.A, 1) >= size(A.A, 2)
+        A_mul_B_centered!(A.buffer, A.A, x, A.centers)
+        return Ac_mul_B_centered!(y, A.A, A.buffer, A.centers)
+    else
+        Ac_mul_B_centered!(A.buffer, A.A, x, A.centers)
+        return A_mul_B_centered!(y, A.A, A.buffer, A.centers)
+    end
+end
+
+# would be better for a more column friendly algorithm
+function A_mul_B_centered!(y::StridedVector{T}, A::AbstractArray{T, 2},
+                           x::StridedVector{T}, centers::StridedArray{T, 2}) where T
+    y[:] = 0
+    for i in 1:size(A, 1)
+        A_mul_B!(view(y, i:i, :), A[i:i,:] - centers, x)
+    end
+end
+
+function Ac_mul_B_centered!(y::StridedVector{T}, A::AbstractArray{T, 2},
+                            x::StridedVector{T}, centers::StridedArray{T, 2}) where T
+    y[:] = 0
+    for i in 1:size(A, 2)
+        Ac_mul_B!(view(y, i:i), A[:, i:i] .- centers[i], x)
+    end
+end
+
+function A_mul_B_centered!(y::StridedArray{T, 2}, A::AbstractArray{T, 2},
+                           x::StridedArray{T, 2}, centers::StridedArray{T, 2}) where T
+    y[:] = 0
+    for i in 1:size(A, 1)
+        A_mul_B!(view(y, i:i, :), A[i:i,:] - centers, x)
+    end
+end
+
+function Ac_mul_B_centered!(y::StridedArray{T, 2}, A::AbstractArray{T, 2},
+                            x::StridedArray{T, 2}, centers::StridedArray{T, 2}) where T
+    y[:] = 0
+    for i in 1:size(A, 2)
+        Ac_mul_B!(view(y, i:i), A[:, i:i] .- centers[i], x)
+    end
+end
 svds(A::AbstractMatrix{<:BlasFloat}; kwargs...) = _svds(A; kwargs...)
 svds(A::AbstractMatrix{BigFloat}; kwargs...) = throw(MethodError(svds, Any[A, kwargs...]))
 function svds(A::AbstractMatrix{T}; kwargs...) where T
@@ -395,7 +460,7 @@ julia> s[:S]
     that the size is smallest.
 """
 svds(A; kwargs...) = _svds(A; kwargs...)
-function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxiter::Int = 1000, ncv::Int = 2*nsv, v0::Vector=zeros(eltype(X),(0,)))
+function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxiter::Int = 1000, ncv::Int = 2*nsv, v0::Vector=zeros(eltype(X),(0,)), center::Bool=false)
     if nsv < 1
         throw(ArgumentError("number of singular values (nsv) must be ≥ 1, got $nsv"))
     end
@@ -407,7 +472,10 @@ function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxite
     if length(v0) ∉ [0,n]
         throw(DimensionMismatch("length of v0, the guess for the starting right Krylov vector, must be 0, or $n, got $(length(v0))"))
     end
-    ex    = eigs(AtA_or_AAt(X), I; which = :LM, ritzvec = ritzvec, nev = nsv, tol = tol, maxiter = maxiter, v0=v0)
+    if center
+        Xmeans = mean(X, 1)
+    end
+    ex    = eigs(center ? Centered_AtA_or_AAt(X, Xmeans) : AtA_or_AAt(X), I; which = :LM, ritzvec = ritzvec, nev = nsv, tol = tol, maxiter = maxiter, v0=v0)
     # ind   = [1:2:ncv;]
     # sval  = abs.(ex[1][ind])
 
@@ -417,10 +485,22 @@ function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxite
         # left_sv  = sqrt(2) * ex[2][ 1:size(X,1),     ind ] .* sign.(ex[1][ind]')
         if size(X, 1) >= size(X, 2)
             V = ex[2]
-            U = qr(scale!(X*V, inv.(svals)))[1]
+            if center
+                Upre = zeros(size(X,1), size(V, 2))
+                A_mul_B_centered!(Upre, X, V, Xmeans)
+                U = qr(scale!(Upre, inv.(svals)))[1]
+            else
+                U = qr(scale!(X*V, inv.(svals)))[1]
+            end
         else
             U = ex[2]
-            V = qr(scale!(X'U, inv.(svals)))[1]
+            if center
+                Vpre = zeroes(size(X, 2), size(U, 2))
+                Ac_mul_B_centered!(Vpre, X, U, Xmeans)
+                V = qr(scale!(Vpre, inv.(svals)))[1]
+            else
+                V = qr(scale!(X'U, inv.(svals)))[1]
+            end
         end
 
         # right_sv = sqrt(2) * ex[2][ size(X,1)+1:end, ind ]
