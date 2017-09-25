@@ -360,8 +360,6 @@ include("mmap.jl")
 import .Mmap
 
 # utilities - timing, help, edit
-include("datafmt.jl")
-using .DataFmt
 include("deepcopy.jl")
 include("interactiveutil.jl")
 include("summarysize.jl")
